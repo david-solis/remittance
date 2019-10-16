@@ -10,18 +10,20 @@ const uuidv4 = require("uuid/v4");
 
 contract('Remittance', (accounts) => {
     const BN_0 = toBN("0");
-    const BN_HETH = toBN(toWei("0.5", "ether"));
-    const BN_1ETH = toBN(toWei("1", "ether"));
+    const BN_H_ETH = toBN(toWei("0.5", "ether"));
+    const BN_1_ETH = toBN(toWei("1", "ether"));
 
     const BN_FEE = toBN(toWei("0.05", "ether"));
+    const BN_FEE_MINUS_ONE = BN_FEE.sub(toBN(1));
+
     const BN_MIN = toBN(2592000); // 1 month in secs
     const BN_MAX = toBN(7776000); // 3 months in secs
 
-    const BN_LT_MIN = toBN(1296000);  // 15 days in secs
-    const BN_DUEDATE = toBN(2592000); // 1 month in secs
-    const BN_GT_MAX = toBN(10368000); // 4 months in secs
+    const BN_LT_MIN = toBN(1296000);   // 15 days in secs
+    const BN_DURATION = toBN(2592000); // 1 month in secs
+    const BN_GT_MAX = toBN(10368000);  // 4 months in secs
 
-    const DUEDATE_MS = 2592000 * 1000; // 1 month in msecs
+    const DURATION_MS = 2592000 * 1000; // 1 month in msecs
 
     const FAKE_ID = asciiToHex("LAZY_TOWN");
     const ADDRESS_ZERO = "0x0000000000000000000000000000000000000000";
@@ -48,10 +50,9 @@ contract('Remittance', (accounts) => {
 
         it("should set remittance fee accordingly", async () => {
             const fee = await remittance.getFee({from: ALICE});
-            assert.isTrue(fee.eq(BN_FEE), "remittance fee mismatch");
+            assert.strictEqual(fee.toString(), BN_FEE.toString(), "remittance fee mismatch");
         });
     });
-
 
     describe("fallback function", function() {
         it("should reject direct transaction with value", async () => {
@@ -63,23 +64,6 @@ contract('Remittance', (accounts) => {
         it("should reject direct transaction without value", async () => {
             await reverts(
                 remittance.sendTransaction({from: ALICE, gas: 3000000})
-            );
-        });
-    });
-
-    describe("Pausable", function() {
-        it("should have deployer as pauser", async () => {
-            const result = await remittance.pause({from: ALICE});
-            await eventEmitted(result, "Paused", log => {
-                return (log.sender === ALICE);
-            });
-            const isPaused = await remittance.isPaused();
-            assert.isTrue(isPaused, "deployer is not pauser");
-        });
-
-        it("should reject other account as pauser", async () => {
-            await reverts(
-                remittance.pause({from: BOB}), "Owned: not owner"
             );
         });
     });
@@ -101,195 +85,204 @@ contract('Remittance', (accounts) => {
 
     describe("fee getter and setter", function () {
         it("should change fee", async () => {
-            const result = await remittance.setFee(BN_HETH, {from: ALICE});
+            const result = await remittance.setFee(BN_H_ETH, {from: ALICE});
             await eventEmitted(result, "LogFeeSet", log => {
-                return log.sender === ALICE && log.fee.eq(BN_HETH);
+                return log.sender === ALICE && log.fee.eq(BN_H_ETH);
             });
-            const fee = await remittance.getFee({from: ALICE});
-            assert.isTrue(fee.eq(BN_HETH), "remittance fee mismatch");
+            const fee = await remittance.getFee({from: BOB});
+            assert.strictEqual(fee.toString(), BN_H_ETH.toString(), "remittance fee mismatch");
         });
     });
 
-    describe("dueDate range getter and setter", () => {
+    describe("duration range getter and setter", () => {
         it("should change range", async () => {
-            const result = await remittance.setDueDateRange(BN_DUEDATE, BN_GT_MAX, {from: ALICE});
-            await eventEmitted(result, "LogDueDateRangeSet", log => {
-                return (log.sender === ALICE && log.minDueDate.eq(BN_DUEDATE) && log.maxDueDate.eq(BN_GT_MAX));
+            const result = await remittance.setDurationRange(BN_DURATION, BN_GT_MAX, {from: ALICE});
+            await eventEmitted(result, "LogDurationRangeSet", log => {
+                return (log.sender === ALICE && log.minDuration.eq(BN_DURATION) && log.maxDuration.eq(BN_GT_MAX));
             });
-            const range = await remittance.getDueDateRange({from: ALICE});
-            assert.isTrue(range.min.eq(BN_DUEDATE), "range min mismatch");
-            assert.isTrue(range.max.eq(BN_GT_MAX), "range max mismatch");
+            const range = await remittance.getDurationRange({from: ALICE});
+            assert.strictEqual(range.min.toString(), BN_DURATION.toString(), "range min mismatch");
+            assert.strictEqual(range.max.toString(), BN_GT_MAX.toString(), "range max mismatch");
         });
     });
 
-    describe("deposit", () => {
+    describe("Function: deposit", () => {
         it("should revert on invalid recipient", async () => {
             await reverts(
-                remittance.deposit(FAKE_ID, ADDRESS_ZERO, BN_DUEDATE, {from: ALICE}), "invalid recipient"
+                remittance.deposit(FAKE_ID, ADDRESS_ZERO, BN_DURATION, {from: ALICE}), "invalid recipient"
             );
         });
 
         it("should revert on previous remittance", async () => {
-            await remittance.deposit(FAKE_ID, BOB, BN_DUEDATE, {from: ALICE, value: BN_HETH});
+            await remittance.deposit(FAKE_ID, BOB, BN_DURATION, {from: ALICE, value: BN_H_ETH});
             await reverts(
-                remittance.deposit(FAKE_ID, BOB, BN_DUEDATE, {from: ALICE, value: BN_HETH}), "previous remittance"
+                remittance.deposit(FAKE_ID, BOB, BN_DURATION, {from: ALICE, value: BN_H_ETH}), "previous remittance"
             );
         });
 
         it("should revert on value less than fee", async () => {
             await reverts(
-                remittance.deposit(FAKE_ID, BOB, BN_DUEDATE, {from: ALICE, value: BN_0}), "value less than fee"
+                remittance.deposit(FAKE_ID, BOB, BN_DURATION, {from: ALICE, value: BN_FEE_MINUS_ONE}), "value less than fee"
             );
         });
 
-        it("should revert on deadline out of range (LT min)", async () => {
+        it("should revert on duration out of range (LT min)", async () => {
             await reverts(
-                remittance.deposit(FAKE_ID, BOB, BN_LT_MIN, {from: ALICE, value: BN_HETH}), "due date out of rang"
+                remittance.deposit(FAKE_ID, BOB, BN_LT_MIN, {from: ALICE, value: BN_H_ETH}), "duration out of range"
             );
         });
 
-        it("should revert on deadline out of range (GT max)", async () => {
+        it("should revert on duration out of range (GT max)", async () => {
             await reverts(
-                remittance.deposit(FAKE_ID, BOB, BN_GT_MAX, {from: ALICE, value: BN_HETH}), "due date out of rang"
+                remittance.deposit(FAKE_ID, BOB, BN_GT_MAX, {from: ALICE, value: BN_H_ETH}), "duration out of range"
             );
         });
 
         it("should start remittance (deposit)", async () => {
             const secret = [];
             uuidv4(null, secret, 0);
-            const id = await remittance.generateEscrowId(BOB, secret, secret);
+            const id = await remittance.generateEscrowId(CAROL, secret, secret);
             const balance1a = toBN(await getBalance(remittance.address));
             const balance2a = toBN(await getBalance(ALICE));
-            const result = await remittance.deposit(id, BOB, BN_DUEDATE, {from: ALICE, value: BN_1ETH});
+            const result = await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             await eventEmitted(result, "LogDeposited", log => {
-                return (log.escrowId === id && log.sender === ALICE && log.recipient === BOB &&
-                    BN_1ETH.sub(BN_FEE).eq(log.amount) && BN_FEE.eq(log.fee));
+                return (log.escrowId === id && log.sender === ALICE && log.recipient === CAROL &&
+                    BN_1_ETH.sub(BN_FEE).eq(log.amount) && BN_FEE.eq(log.fee));
             });
+            // Check contract balance
             const balance1b = toBN(await getBalance(remittance.address));
-            assert.isTrue(balance1b.sub(balance1a).eq(BN_1ETH), "contract balance mismatch");
+            assert.strictEqual(balance1b.sub(balance1a).toString(), BN_1_ETH.toString(), "contract balance mismatch");
+            // Check sender balance
             const balance2b = toBN(await getBalance(ALICE));
             const gasUsed2b = toBN(result.receipt.gasUsed);
             const transact2b = await web3.eth.getTransaction(result.tx);
             const gasPrice2b = toBN(transact2b.gasPrice);
-            assert.isTrue(balance2a.sub(balance2b.add(gasUsed2b.mul(gasPrice2b))).eq(BN_1ETH), "sender balance mismatch");
+            assert.strictEqual(balance2a.sub(balance2b.add(gasUsed2b.mul(gasPrice2b))).toString(), BN_1_ETH.toString(),
+                "sender balance mismatch");
             const info = await remittance.escrows(id);
-            assert.strictEqual(info.sender, ALICE, "sender mismatch");
-            assert.strictEqual(info.recipient, BOB, "recipient mismatch");
-            assert.isTrue(BN_1ETH.sub(BN_FEE).eq(info.amount), "amount mismatch");
+            assert.strictEqual(info.recipient, CAROL, "recipient mismatch");
+            assert.strictEqual(BN_1_ETH.sub(BN_FEE).toString(), info.amount.toString(), "amount mismatch");
         });
     });
 
-    describe("transfer", () => {
-        it("should revert on remittance not set", async () => {
+    describe("Function: transfer", () => {
+        it("should revert on remittance doesn't exist", async () => {
             await reverts(
-                remittance.transfer(ALICE, FAKE_ID, FAKE_ID, {from: BOB}), "remittance not set"
+                remittance.transfer(FAKE_ID, FAKE_ID, {from: BOB}), "remittance already claimed or not found"
             );
         });
 
         it("should revert on remittance already claimed", async () => {
             const secret = [];
             uuidv4(null, secret, 0);
-            const id = await remittance.generateEscrowId(BOB, secret, secret);
-            await remittance.deposit(id, BOB, BN_DUEDATE, {from: ALICE, value: BN_1ETH});
-            await remittance.transfer(ALICE, secret, secret, {from: BOB});
+            const id = await remittance.generateEscrowId(CAROL, secret, secret);
+            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
+            await remittance.transfer(secret, secret, {from: CAROL});
             await reverts(
-                remittance.transfer(ALICE, secret, secret, {from: BOB}),
-                "remittance already claimed"
+                remittance.transfer(secret, secret, {from: CAROL}),
+                "remittance already claimed or not found"
             );
         });
 
         it("should revert on remittance not found", async () => {
             const secret = [];
             uuidv4(null, secret, 0);
-            const id = await remittance.generateEscrowId(BOB, secret, secret);
-            await remittance.deposit(id, BOB, BN_DUEDATE, {from: ALICE, value: BN_1ETH});
+            const id = await remittance.generateEscrowId(CAROL, secret, secret);
+            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             await reverts(
-                remittance.transfer(ALICE, FAKE_ID, FAKE_ID, {from: BOB}),
-                "remittance not set"
+                remittance.transfer(FAKE_ID, FAKE_ID, {from: CAROL}),
+                "remittance already claimed or not found"
             );
         });
 
         it("should complete remittance (transfer)", async () => {
             const secret = [];
             uuidv4(null, secret, 0);
-            const id = await remittance.generateEscrowId(BOB, secret, secret);
-            await remittance.deposit(id, BOB, BN_DUEDATE, {from: ALICE, value: BN_1ETH});
+            const id = await remittance.generateEscrowId(CAROL, secret, secret);
+            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             const balance1a = toBN(await getBalance(remittance.address));
-            const balance2a = toBN(await getBalance(BOB));
-            const result = await remittance.transfer(ALICE, secret, secret, {from: BOB});
-            await eventEmitted(result, "LogWTransferred", log => {
-                return (log.escrowId === id && log.recipient === BOB && BN_1ETH.sub(BN_FEE).eq(log.amount));
+            const balance2a = toBN(await getBalance(CAROL));
+            const result = await remittance.transfer(secret, secret, {from: CAROL});
+            await eventEmitted(result, "LogTransferred", log => {
+                return (log.escrowId === id && log.recipient === CAROL && BN_1_ETH.sub(BN_FEE).eq(log.amount));
             });
+            // Check contract balance
             const balance1b = toBN(await getBalance(remittance.address));
-            assert.isTrue(balance1a.sub(balance1b).eq(BN_1ETH.sub(BN_FEE)), "contract balance mismatch");
-            const balance2b = toBN(await getBalance(BOB));
+            assert.strictEqual(balance1a.sub(balance1b).toString(), BN_1_ETH.sub(BN_FEE).toString(),
+                "contract balance mismatch");
+            // Check recipient balance
+            const balance2b = toBN(await getBalance(CAROL));
             const gasUsed2b = toBN(result.receipt.gasUsed);
             const transact2b = await web3.eth.getTransaction(result.tx);
             const gasPrice2b = toBN(transact2b.gasPrice);
-            assert.isTrue(balance2b.add(gasUsed2b.mul(gasPrice2b)).sub(balance2a).eq(BN_1ETH.sub(BN_FEE)), "recipient balance mismatch");
+            assert.strictEqual(balance2b.add(gasUsed2b.mul(gasPrice2b)).sub(balance2a).toString(),
+                BN_1_ETH.sub(BN_FEE).toString(), "recipient balance mismatch");
+            // Check storage
             const info = await remittance.escrows(id);
-            assert.strictEqual(info.sender, ADDRESS_ZERO, "sender not released");
             assert.strictEqual(info.recipient, ADDRESS_ZERO, "recipient not released");
-            assert.isTrue(info.amount.eq(BN_0), "amount not released");
-            assert.isFalse(info.dueDate.eq(BN_0), "due date was released");
+            assert.strictEqual(info.amount.toString(), BN_0.toString(), "amount not released");
+            assert.strictEqual(info.dueDate.toString(), BN_0.toString(), "due date not released");
         });
     });
 
     describe("Function: reclaim", () => {
-        it("should revert on remittance not set", async () => {
+        it("should revert on doesn't exist", async () => {
             await reverts(
                 remittance.reclaim(FAKE_ID, BOB, { from: ALICE }),
-                "remittance not set"
+                "remittance already claimed or not found"
             );
         });
 
         it("should revert on remittance already claimed", async () => {
             const secret = [];
             uuidv4(null, secret, 0);
-            const id = await remittance.generateEscrowId(BOB, secret, secret);
-            await remittance.deposit(id, BOB, BN_DUEDATE, {from: ALICE, value: BN_1ETH});
-            await remittance.transfer(ALICE, secret, secret, { from: BOB });
+            const id = await remittance.generateEscrowId(CAROL, secret, secret);
+            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
+            await remittance.transfer(secret, secret, { from: CAROL });
             await reverts(
-                remittance.reclaim(id, BOB, { from: ALICE }),
-                "remittance already claimed"
+                remittance.reclaim(id, CAROL, { from: ALICE }),
+                "remittance already claimed or not found"
             );
         });
 
         it("should revert on too early to reclaim", async () => {
             const secret = [];
             uuidv4(null, secret, 0);
-            const id = await remittance.generateEscrowId(BOB, secret, secret);
+            const id = await remittance.generateEscrowId(CAROL, secret, secret);
 
-            await remittance.deposit(id, BOB, BN_DUEDATE, {from: ALICE, value: BN_1ETH});
+            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             await reverts(
-                remittance.reclaim(id, BOB, { from: ALICE }),"too early to reclaim");
+                remittance.reclaim(id, CAROL, { from: ALICE }),"too early to reclaim");
         });
 
         it("should complete remittance (reclaim)", async () => {
             const secret = [];
             uuidv4(null, secret, 0);
-            const id = await remittance.generateEscrowId(BOB, secret, secret);
-            await remittance.deposit(id, BOB, BN_DUEDATE, {from: ALICE, value: BN_1ETH});
+            const id = await remittance.generateEscrowId(CAROL, secret, secret);
+            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             const balance1a = toBN(await getBalance(remittance.address));
             const balance2a = toBN(await getBalance(ALICE));
-            await advanceTime(DUEDATE_MS);
-            const result = await remittance.reclaim(id, BOB, { from: ALICE });
+            await advanceTime(DURATION_MS);
+            const result = await remittance.reclaim(id, CAROL, { from: ALICE });
             await eventEmitted(result, "LogReclaimed", log => {
-                return (log.escrowId === id && log.sender === ALICE && BN_1ETH.sub(BN_FEE).eq(log.amount));
+                return (log.escrowId === id && log.sender === ALICE && BN_1_ETH.sub(BN_FEE).eq(log.amount));
             });
+            // Check contract balance
             const balance1b = toBN(await getBalance(remittance.address));
-            assert.isTrue(balance1a.sub(balance1b).eq(BN_1ETH.sub(BN_FEE)), "contract balance mismatch");
+            assert.strictEqual(balance1a.sub(balance1b).toString(), BN_1_ETH.sub(BN_FEE).toString(),
+                "contract balance mismatch");
+            // Check sender balance
             const balance2b = toBN(await getBalance(ALICE));
             const gasUsed2b = toBN(result.receipt.gasUsed);
             const transact2b = await web3.eth.getTransaction(result.tx);
             const gasPrice2b = toBN(transact2b.gasPrice);
-            assert.isTrue(balance2b.add(gasUsed2b.mul(gasPrice2b)).sub(balance2a).eq(BN_1ETH.sub(BN_FEE)),
-                "recipient balance mismatch");
+            assert.strictEqual(balance2b.add(gasUsed2b.mul(gasPrice2b)).sub(balance2a).toString(),
+                BN_1_ETH.sub(BN_FEE).toString(), "recipient balance mismatch");
+            // Check storage
             const info = await remittance.escrows(id);
-            assert.strictEqual(info.sender, ADDRESS_ZERO, "sender not released");
             assert.strictEqual(info.recipient, ADDRESS_ZERO, "recipient not released");
-            assert.isTrue(info.amount.eq(BN_0), "amount not released");
-            assert.isFalse(info.dueDate.eq(BN_0), "due date was released");
+            assert.strictEqual(info.amount.toString(), BN_0.toString(), "amount not released");
+            assert.strictEqual(info.dueDate.toString(), BN_0.toString(), "due date not released");
         });
     });
 });

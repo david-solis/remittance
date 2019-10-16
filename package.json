@@ -12,7 +12,6 @@
     "truffle-assertions": "^0.9.1",
     "uuid": "^3.3.3"
   },
-  "devDependencies": {},
   "scripts": {
     "test": "truffle test"
   },

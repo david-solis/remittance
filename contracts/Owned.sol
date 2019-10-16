@@ -16,14 +16,13 @@ contract Owned {
     }
 
     modifier fromOwner() {
-        require(msg.sender == currentOwner, "Owned: not owner");
+        require(msg.sender == currentOwner);
         _;
     }
 
     /**
      * Sets the new owner for this contract.
      *     It should roll back if the caller is not the current owner.
-     *     It should roll back if the argument is the current owner.
      *     It should roll back if the argument is a 0 address.
      * @param newOwner The new owner of the contract
      * @return Whether the action was successful.
@@ -32,8 +31,12 @@ contract Owned {
      *     The new owner.
      */
     function setOwner(address newOwner) public fromOwner returns (bool success) {
-        require(newOwner != address(0) && newOwner != currentOwner);
-        emit LogOwnerSet(currentOwner, newOwner);
+        require(newOwner != address(0));
+
+        if (newOwner == msg.sender) {
+            return false;
+        }
+        emit LogOwnerSet(msg.sender, newOwner);
         currentOwner = newOwner;
         return true;
     }

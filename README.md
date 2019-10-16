@@ -1,5 +1,5 @@
 # Remittance
-
+![Remittance](images/escrow-contract.png)
 ## Problem Statement
 You will create a smart contract named Remittance whereby:
 * There are three people: Alice, Bob & Carol.
