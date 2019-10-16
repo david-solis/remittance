@@ -24,6 +24,7 @@ contract Remittance is Pausable {
     event LogWithdrawn(address indexed sender, uint amount);
 
     struct Escrow {
+        address sender;
         address recipient;
         uint amount;
         uint dueDate;
@@ -64,9 +65,9 @@ contract Remittance is Pausable {
         return (minDuration, maxDuration);
     }
 
-    function generateEscrowId(address recipient, bytes32 secretRecipient, bytes32 secretTwo) view public
+    function generateEscrowId(address recipient, bytes32 secret) view public
     returns (bytes32) {
-        return keccak256(abi.encodePacked(this, recipient, secretRecipient, secretTwo));
+        return keccak256(abi.encodePacked(this, recipient, secret));
     }
 
     function deposit(bytes32 escrowId, address recipient, uint duration) payable public whenNotPaused {
@@ -77,6 +78,7 @@ contract Remittance is Pausable {
 
         uint amount = msg.value.sub(fee);
         Escrow memory escrow = Escrow({
+            sender : msg.sender,
             recipient : recipient,
             amount : amount,
             dueDate : block.timestamp.add(duration)
@@ -87,31 +89,33 @@ contract Remittance is Pausable {
         emit LogDeposited(escrowId, msg.sender, recipient, amount, fee, duration);
     }
 
-    function transfer(bytes32 secretRecipient, bytes32 secretTwo) public whenNotPaused {
-        bytes32 escrowId = generateEscrowId(msg.sender, secretRecipient, secretTwo);
+    function transfer(bytes32 secret) public whenNotPaused {
+        bytes32 escrowId = generateEscrowId(msg.sender, secret);
         Escrow storage escrow = escrows[escrowId];
+        uint amount = escrow.amount;
 
         // Check escrow
-        require(escrow.amount != uint(0), "remittance already claimed or not found");
-        require(escrow.recipient == msg.sender, "recipient mismatch");
+        require(escrows[escrowId].dueDate != uint(0), "remittance not found");
+        require(amount != uint(0), "remittance already claimed");
         // Check due date
         require(block.timestamp <= escrow.dueDate, "too late to transfer");
 
-        uint amount = escrow.amount;
         emit LogTransferred(escrowId, msg.sender, amount);
         cleanAndReleaseEscrow(escrowId);
         msg.sender.transfer(amount);
     }
 
-    function reclaim(bytes32 escrowId, address recipient) public whenNotPaused {
+    function reclaim(bytes32 escrowId) public whenNotPaused {
         Escrow storage escrow = escrows[escrowId];
+        uint amount = escrow.amount;
         // Check escrow
-        require(escrow.amount != uint(0), "remittance already claimed or not found");
-        require(escrow.recipient == recipient, "recipient mismatch");
+        require(escrows[escrowId].dueDate != uint(0), "remittance not found");
+        require(amount != uint(0), "remittance already claimed");
+        // Check sender
+        require(escrow.sender == msg.sender, "sender mismatch");
         // Check due date
         require(escrow.dueDate <= block.timestamp, "too early to reclaim");
 
-        uint amount = escrow.amount;
         emit LogReclaimed(escrowId, msg.sender, amount);
         cleanAndReleaseEscrow(escrowId);
         msg.sender.transfer(amount);
@@ -119,9 +123,10 @@ contract Remittance is Pausable {
 
     function cleanAndReleaseEscrow(bytes32 escrowId) private {
         Escrow storage escrow = escrows[escrowId];
+        escrow.sender = address(0);
         escrow.recipient = address(0);
         escrow.amount = 0;
-        escrow.dueDate = 0;
+        // dueDate is used to identify claimed or transferred escrows
     }
 
     function withdraw() public whenNotPaused {
