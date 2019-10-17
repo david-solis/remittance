@@ -106,34 +106,28 @@ contract('Remittance', (accounts) => {
     });
 
     describe("Function: deposit", () => {
-        it("should revert on invalid recipient", async () => {
-            await reverts(
-                remittance.deposit(FAKE_ID, ADDRESS_ZERO, BN_DURATION, {from: ALICE}), "invalid recipient"
-            );
-        });
-
         it("should revert on previous remittance", async () => {
-            await remittance.deposit(FAKE_ID, BOB, BN_DURATION, {from: ALICE, value: BN_H_ETH});
+            await remittance.deposit(FAKE_ID, BN_DURATION, {from: ALICE, value: BN_H_ETH});
             await reverts(
-                remittance.deposit(FAKE_ID, BOB, BN_DURATION, {from: ALICE, value: BN_H_ETH}), "previous remittance"
+                remittance.deposit(FAKE_ID, BN_DURATION, {from: ALICE, value: BN_H_ETH}), "previous remittance"
             );
         });
 
         it("should revert on value less than fee", async () => {
             await reverts(
-                remittance.deposit(FAKE_ID, BOB, BN_DURATION, {from: ALICE, value: BN_FEE_MINUS_ONE}), "value less than fee"
+                remittance.deposit(FAKE_ID, BN_DURATION, {from: ALICE, value: BN_FEE_MINUS_ONE}), "value less than fee"
             );
         });
 
         it("should revert on duration out of range (LT min)", async () => {
             await reverts(
-                remittance.deposit(FAKE_ID, BOB, BN_LT_MIN, {from: ALICE, value: BN_H_ETH}), "duration out of range"
+                remittance.deposit(FAKE_ID, BN_LT_MIN, {from: ALICE, value: BN_H_ETH}), "duration out of range"
             );
         });
 
         it("should revert on duration out of range (GT max)", async () => {
             await reverts(
-                remittance.deposit(FAKE_ID, BOB, BN_GT_MAX, {from: ALICE, value: BN_H_ETH}), "duration out of range"
+                remittance.deposit(FAKE_ID, BN_GT_MAX, {from: ALICE, value: BN_H_ETH}), "duration out of range"
             );
         });
 
@@ -142,9 +136,9 @@ contract('Remittance', (accounts) => {
             uuidv4(null, secret, 0);
             const id = await remittance.generateEscrowId(CAROL, secret);
             const balance1a = toBN(await getBalance(remittance.address));
-            const result = await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
+            const result = await remittance.deposit(id, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             await eventEmitted(result, "LogDeposited", log => {
-                return (log.escrowId === id && log.sender === ALICE && log.recipient === CAROL &&
+                return (log.escrowId === id && log.sender === ALICE &&
                     BN_1_ETH.sub(BN_FEE).eq(log.amount) && BN_FEE.eq(log.fee));
             });
             // Check contract balance
@@ -169,7 +163,7 @@ contract('Remittance', (accounts) => {
             const secret = [];
             uuidv4(null, secret, 0);
             const id = await remittance.generateEscrowId(CAROL, secret);
-            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
+            await remittance.deposit(id, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             await remittance.transfer(secret, {from: CAROL});
             await reverts(
                 remittance.transfer(secret, {from: CAROL}),
@@ -181,7 +175,7 @@ contract('Remittance', (accounts) => {
             const secret = [];
             uuidv4(null, secret, 0);
             const id = await remittance.generateEscrowId(CAROL, secret);
-            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
+            await remittance.deposit(id, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             await reverts(
                 remittance.transfer(FAKE_ID, {from: CAROL}),
                 "remittance already claimed or not found"
@@ -192,12 +186,12 @@ contract('Remittance', (accounts) => {
             const secret = [];
             uuidv4(null, secret, 0);
             const id = await remittance.generateEscrowId(CAROL, secret);
-            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
+            await remittance.deposit(id, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             const balance1a = toBN(await getBalance(remittance.address));
             const balance2a = toBN(await getBalance(CAROL));
             const result = await remittance.transfer(secret, {from: CAROL});
             await eventEmitted(result, "LogTransferred", log => {
-                return (log.escrowId === id && log.recipient === CAROL && BN_1_ETH.sub(BN_FEE).eq(log.amount));
+                return (log.escrowId === id && BN_1_ETH.sub(BN_FEE).eq(log.amount));
             });
             // Check contract balance
             const balance1b = toBN(await getBalance(remittance.address));
@@ -230,7 +224,7 @@ contract('Remittance', (accounts) => {
             const secret = [];
             uuidv4(null, secret, 0);
             const id = await remittance.generateEscrowId(CAROL, secret);
-            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
+            await remittance.deposit(id, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             await remittance.transfer(secret, { from: CAROL });
             await reverts(
                 remittance.reclaim(id, { from: ALICE }),
@@ -243,7 +237,7 @@ contract('Remittance', (accounts) => {
             uuidv4(null, secret, 0);
             const id = await remittance.generateEscrowId(CAROL, secret);
 
-            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
+            await remittance.deposit(id, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             await reverts(
                 remittance.reclaim(id, { from: ALICE }),"too early to reclaim");
         });
@@ -253,7 +247,7 @@ contract('Remittance', (accounts) => {
             uuidv4(null, secret, 0);
             const id = await remittance.generateEscrowId(CAROL, secret);
 
-            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
+            await remittance.deposit(id, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             await reverts(
                 remittance.reclaim(id, { from: BOB }),"sender mismatch");
         });
@@ -262,7 +256,7 @@ contract('Remittance', (accounts) => {
             const secret = [];
             uuidv4(null, secret, 0);
             const id = await remittance.generateEscrowId(CAROL, secret);
-            await remittance.deposit(id, CAROL, BN_DURATION, {from: ALICE, value: BN_1_ETH});
+            await remittance.deposit(id, BN_DURATION, {from: ALICE, value: BN_1_ETH});
             const balance1a = toBN(await getBalance(remittance.address));
             const balance2a = toBN(await getBalance(ALICE));
             await advanceTime(DURATION_MS);

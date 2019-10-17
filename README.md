@@ -30,7 +30,7 @@ similar to 2-factor authentication.*
 
 *Because usage of Carol's private key is a strong signal that it is Carol who did the transaction.*
 
-## Stretch Goals:
+## Stretch Goals
 * Did you implement the basic specs airtight, without any exploit, before ploughing through the stretch
 goals?
 * *Add a deadline*, after which Alice can claim back the unchallenged Ether.
@@ -41,3 +41,10 @@ goals?
 * Make you, *the owner of the contract, take a cut of the Ethers*. How much? Your call. Perhaps smaller
 than what it would cost Alice to deploy the same contract herself.
 * Did you degrade safety in the name of adding features?
+
+## Design
+A picture is worth a thousand words.
+![Design](images/escrow-design.png)
+
+
+![Proof of Completion](images/proof-of-completion.png)

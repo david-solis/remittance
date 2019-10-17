@@ -16,7 +16,7 @@ contract Remittance is Pausable {
 
     //  Remittance events
     event LogReclaimed(bytes32 indexed escrowId, address indexed sender, uint amount);
-    event LogDeposited(bytes32 indexed escrowId, address indexed sender, address indexed recipient, uint amount,
+    event LogDeposited(bytes32 indexed escrowId, address indexed sender, uint amount,
         uint fee, uint duration);
     event LogTransferred(bytes32 indexed escrowId, address indexed recipient, uint amount);
 
@@ -69,8 +69,7 @@ contract Remittance is Pausable {
         return keccak256(abi.encodePacked(this, recipient, secret));
     }
 
-    function deposit(bytes32 escrowId, address recipient, uint duration) payable public whenNotPaused {
-        require(recipient != address(0), "invalid recipient");
+    function deposit(bytes32 escrowId, uint duration) payable public whenNotPaused {
         require(msg.value > fee, "value less than fee");
         require(escrows[escrowId].dueDate == uint(0), "previous remittance");
         require(minDuration <= duration && duration <= maxDuration, "duration out of range");
@@ -84,7 +83,7 @@ contract Remittance is Pausable {
 
         escrows[escrowId] = escrow;
         fees[getOwner()] = fee.add(fees[getOwner()]);
-        emit LogDeposited(escrowId, msg.sender, recipient, amount, fee, duration);
+        emit LogDeposited(escrowId, msg.sender, amount, fee, duration);
     }
 
     function transfer(bytes32 secret) public whenNotPaused {
