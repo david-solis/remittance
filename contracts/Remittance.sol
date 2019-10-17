@@ -25,7 +25,6 @@ contract Remittance is Pausable {
 
     struct Escrow {
         address sender;
-        address recipient;
         uint amount;
         uint dueDate;
     }
@@ -79,7 +78,6 @@ contract Remittance is Pausable {
         uint amount = msg.value.sub(fee);
         Escrow memory escrow = Escrow({
             sender : msg.sender,
-            recipient : recipient,
             amount : amount,
             dueDate : block.timestamp.add(duration)
             });
@@ -95,8 +93,7 @@ contract Remittance is Pausable {
         uint amount = escrow.amount;
 
         // Check escrow
-        require(escrows[escrowId].dueDate != uint(0), "remittance not found");
-        require(amount != uint(0), "remittance already claimed");
+        require(amount != uint(0), "remittance already claimed or not found");
         // Check due date
         require(block.timestamp <= escrow.dueDate, "too late to transfer");
 
@@ -109,8 +106,7 @@ contract Remittance is Pausable {
         Escrow storage escrow = escrows[escrowId];
         uint amount = escrow.amount;
         // Check escrow
-        require(escrows[escrowId].dueDate != uint(0), "remittance not found");
-        require(amount != uint(0), "remittance already claimed");
+        require(amount != uint(0), "remittance already claimed or not found");
         // Check sender
         require(escrow.sender == msg.sender, "sender mismatch");
         // Check due date
@@ -124,7 +120,6 @@ contract Remittance is Pausable {
     function cleanAndReleaseEscrow(bytes32 escrowId) private {
         Escrow storage escrow = escrows[escrowId];
         escrow.sender = address(0);
-        escrow.recipient = address(0);
         escrow.amount = 0;
         // dueDate is used to identify claimed or transferred escrows
     }
